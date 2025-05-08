@@ -2,11 +2,9 @@ import streamlit as st
 import pandas as pd
 import time
 
-# Set page config
 st.set_page_config(page_title="Register Tools", layout="centered")
 
-# Session expiration (30 minutes)
-SESSION_DURATION = 30 * 60  # 30 minutes in seconds
+SESSION_DURATION = 30 * 60 
 current_time = time.time()
 if "session_start" not in st.session_state:
     st.session_state.session_start = current_time
@@ -15,13 +13,10 @@ elif current_time - st.session_state.session_start > SESSION_DURATION:
     st.session_state.session_start = current_time
     st.warning("Session expired. Starting a new session.")
 
-# Denominations
 bills = {"100": 100.00, "50": 50.00, "20": 20.00, "10": 10.00, "5": 5.00, "1": 1.00}
 coins = {"0.25": 0.25, "0.10": 0.10, "0.05": 0.05, "0.01": 0.01}
 all_denoms = {**bills, **coins}
 
-
-# --- Helper: Breakdown Bills for Amount ---
 def get_limited_breakdown(amount, available_counts):
     breakdown = {}
     remaining = round(amount, 2)
@@ -37,14 +32,12 @@ def get_limited_breakdown(amount, available_counts):
     return breakdown
 
 
-# --- Sidebar Navigation ---
 st.sidebar.title("🧰 Tools")
 tool = st.sidebar.radio(
     "Select a feature",
     ["Register Closing Assistant", "Tip Split Calculator", "Yield Calculator"],
 )
 
-# --- Register Closing Assistant ---
 if tool == "Register Closing Assistant":
     st.markdown(
         "<h1 style='text-align: center;'>🧾 Register Closing Assistant</h1>",
@@ -102,7 +95,6 @@ if tool == "Register Closing Assistant":
                     "✅ Ready to remove the above bills and coins for the deposit."
                 )
 
-# --- Tip Split Calculator ---
 elif tool == "Tip Split Calculator":
     st.markdown(
         "<h1 style='text-align: center;'>💵 Tip Split Calculator</h1>",
@@ -156,7 +148,6 @@ elif tool == "Tip Split Calculator":
                 "✅ Use the above denominations to give each person their tip share."
             )
 
-# --- Yield Calculator ---
 elif tool == "Yield Calculator":
     st.markdown(
         "<h1 style='text-align: center;'>🗑️ Waste & Yield Calculator</h1>",
@@ -211,7 +202,6 @@ elif tool == "Yield Calculator":
                 waste_inputs[p] * waste_products[p] for p in waste_inputs
             )
 
-            # Exact names as they appear in uploaded CSV
             sales_multipliers = {
                 "Pretzel-Cinnamon Sugar": 1,
                 "Pretzel-Original": 1,
@@ -229,13 +219,11 @@ elif tool == "Yield Calculator":
 
             total_pretzels = 0
 
-            # Waste breakdown
             for item, qty in waste_inputs.items():
                 multiplier = waste_products[item]
                 contribution = qty * multiplier
                 total_pretzels += contribution
 
-            # Sales breakdown
             for _, row in pretzels_df.iterrows():
                 name = row["Item Name"]
                 qty = row["Quantity"]
