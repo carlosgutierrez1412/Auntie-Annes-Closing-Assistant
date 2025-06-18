@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import time
 import random
+import json
+import subprocess
 
 # Set page config
 st.set_page_config(page_title="Register Tools", layout="centered")
@@ -126,11 +128,28 @@ if tool == "Register Closing Assistant":
                 st.error(result["error"])
             else:
                 st.markdown("### 🔍 Breakdown of Bills/Coins to Remove")
+                # Only show detailed breakdown for bills, and a single line for coins
+                deposit_breakdown = {}
+                total_coins = 0.0
                 for denom, count in result.items():
-                    st.markdown(f"- **{denom}**: {count}")
+                    denom_value = float(denom.replace('$', ''))
+                    if denom_value >= 1.0:
+                        total_value = denom_value * count
+                        st.markdown(f"- $ {denom}: {count} =  ${total_value:.2f}")
+                        deposit_breakdown[denom] = total_value
+                    else:
+                        total_coins += denom_value * count
+                if total_coins > 0:
+                    st.markdown(f"- Coins: ${total_coins:.2f}")
+                    deposit_breakdown['coins'] = round(total_coins, 2)
                 st.success(
                     "✅ Ready to remove the above bills and coins for the deposit."
                 )
+                # Store in session_state for combined export
+                st.session_state['register_closing'] = {
+                    "deposit_amount": deposit_amount,
+                    "deposit_breakdown": deposit_breakdown
+                }
 
 # --- Tip Split Calculator ---
 elif tool == "Tip Split Calculator":
@@ -181,7 +200,12 @@ elif tool == "Tip Split Calculator":
         else:
             st.markdown("### 💸 Bills/Coins to Give Each Person")
             for denom, count in result.items():
-                st.markdown(f"- **{denom}**: {count}")
+                denom_value = float(denom.replace('$', ''))
+                if denom_value >= 1.0:
+                    total_value = denom_value * count
+                    st.markdown(f"- **{denom}**: {count} = ${total_value:.2f}")
+                else:
+                    st.markdown(f"- **{denom}**: {count}")
             st.success(
                 "✅ Use the above denominations to give each person their tip share."
             )
@@ -295,9 +319,11 @@ elif tool == "Yield Calculator":
 
                 st.markdown("---")
                 st.markdown("### 📊 Calculated Waste Distribution")
+                waste_output = {}
                 for product in output_order:
                     if product in waste_distribution:
                         st.markdown(f"- **{product}**: {int(waste_distribution[product])}")
+                        waste_output[product] = int(waste_distribution[product])
 
                 st.markdown("---")
                 st.markdown(
@@ -305,5 +331,39 @@ elif tool == "Yield Calculator":
                     unsafe_allow_html=True,
                 )
 
+                # After parsing the CSV and before the waste calculation, extract Net Sales for Sales Pretzels Totals
+                pretzels_totals_row = df[(df["Item Group"] == "Sales Pretzels") & (df["Item Name"].str.lower().str.contains("totals"))]
+                net_sales = 0.0
+                if not pretzels_totals_row.empty:
+                    net_sales = float(pretzels_totals_row.iloc[0]["Net Sales"])
+                    st.markdown(f"### 💵 Net Sales: ${net_sales:,.2f}")
+
+                # When exporting yield data, include net_sales
+                export_yield_data = {
+                    "batches_used": int(batches_used),
+                    "waste_distribution": waste_output,
+                    "net_sales": net_sales
+                }
+                st.session_state['yield_calculator'] = export_yield_data
+
         except Exception as e:
             st.error(f"❌ Error processing file: {e}")
+
+# --- Combined Export Button in Sidebar ---
+combined_export = {}
+if 'register_closing' in st.session_state:
+    combined_export['register_closing'] = st.session_state['register_closing']
+if 'yield_calculator' in st.session_state:
+    combined_export['yield_calculator'] = st.session_state['yield_calculator']
+if combined_export:
+    # Only show the bot button, and always export the latest data before running the bot
+    if st.sidebar.button("🚀 Submit to Company Site (Run Bot)"):
+        # Always write the latest data before running the bot
+        with open("closing_and_yield_data.json", "w") as f:
+            json.dump(combined_export, f, indent=2)
+        with st.spinner('Running automation bot...'):
+            result = subprocess.run(["python", "bot.py"], capture_output=True, text=True)
+        if result.returncode == 0:
+            st.sidebar.success("Bot ran successfully!")
+        else:
+            st.sidebar.error(f"Bot failed:\n{result.stderr}")
